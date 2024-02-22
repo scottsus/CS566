@@ -14,8 +14,8 @@ class Optimizer(object):
     """
 
     def __init__(self, net, lr=1e-4):
-        self.net = net  # the model
-        self.lr = lr  # learning rate
+        self.net = net  # model
+        self.lr = lr    # learning rate
 
     """ Make a step and update all parameters """
 
@@ -66,7 +66,10 @@ class SGDM(Optimizer):
         #############################################################################
         # TODO: Implement the SGD + Momentum                                        #
         #############################################################################
-        pass
+        for n, dv in layer.grads.items():
+            v = self.momentum * self.velocity.get(n, 0.0) - self.lr * dv
+            layer.params[n] += v
+            self.velocity[n] = v
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -86,7 +89,11 @@ class RMSProp(Optimizer):
         #############################################################################
         # TODO: Implement the RMSProp                                               #
         #############################################################################
-        pass
+        for n, dv in layer.grads.items():
+            decay_ave = self.decay * self.cache.get(n, 0.0) + (1 - self.decay) * dv**2
+            f_theta = (self.lr * dv) / np.sqrt(decay_ave + self.eps)
+            layer.params[n] -= f_theta
+            self.cache[n] = decay_ave
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -108,7 +115,17 @@ class Adam(Optimizer):
         #############################################################################
         # TODO: Implement the Adam                                                  #
         #############################################################################
-        pass
+        t = self.t + 1
+        for n, dv in layer.grads.items():
+            mt = self.beta1 * self.mt.get(n, 0.0) + (1 - self.beta1) * dv
+            vt = self.beta2 * self.vt.get(n, 0.0) + (1 - self.beta2) * dv**2
+            bias_mt = mt / (1 - self.beta1**t)
+            bias_vt = vt / (1 - self.beta2**t)
+            layer.params[n] -= (self.lr * bias_mt) / (np.sqrt(bias_vt) + self.eps)
+
+            self.mt[n] = mt
+            self.vt[n] = vt
+        self.t = t
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################

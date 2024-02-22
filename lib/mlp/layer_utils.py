@@ -97,9 +97,7 @@ class flatten(object):
         # You need to reshape (flatten) the input features.                         #
         # Store the results in the variable self.meta provided above.               #
         #############################################################################
-        bz = feat.shape[0]
-        feat_size = np.prod(feat.shape[1:])
-        output = feat.reshape((bz, feat_size))
+        output = feat.reshape((feat.shape[0], np.prod(feat.shape[1:])))
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -116,7 +114,7 @@ class flatten(object):
         # You need to reshape (flatten) the input gradients and return.             #
         # Store the results in the variable dfeat provided above.                   #
         #############################################################################
-        dfeat = dprev.reshape(15, 2, 2, 3)
+        dfeat = dprev.reshape(feat.shape[0], *feat.shape[1:])
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -182,7 +180,7 @@ class fc(object):
         #############################################################################
         dfeat = dprev @ self.params[self.w_name].T
         dw = self.meta.T @ dprev
-        db = [sum(dprev[:, i]) for i in range(dprev.shape[1])] # sum the columns
+        db = np.array([sum(dprev[:, i]) for i in range(dprev.shape[1])]) # sum the columns
 
         self.grads[self.w_name] = dw
         self.grads[self.b_name] = db
@@ -214,7 +212,7 @@ class leaky_relu(object):
         # TODO: Implement the forward pass of a rectified linear unit               #
         # Store the results in the variable output provided above.                  #
         #############################################################################
-        pass
+        output = np.where(feat >= 0, feat, self.negative_slope * feat)
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -231,7 +229,7 @@ class leaky_relu(object):
         # TODO: Implement the backward pass of a rectified linear unit              #
         # Store the output gradients in the variable dfeat provided above.          #
         #############################################################################
-        pass
+        dfeat = dprev * np.where(feat > 0, 1, self.negative_slope)
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -273,10 +271,19 @@ class dropout(object):
         # Remember if the keep_prob = 0, there is no dropout.                       #
         # Use self.rng to generate random numbers.                                  #
         # During training, need to scale values with (1 / keep_prob).               #
-        # Store the mask in the variable kept provided above.                       #
-        # Store the results in the variable output provided above.                  #
+        # Store the mask in the variable `kept` provided above.                     #
+        # Store the results in the variable `output` provided above.                #
         #############################################################################
-        pass
+        if is_training:
+            if self.keep_prob == 0:
+                kept = np.ones_like(feat)
+                output = feat
+            else:
+                kept = self.rng.rand(*feat.shape) < self.keep_prob
+                output = (feat * kept) * (1 / self.keep_prob)
+        else:
+            kept = np.ones_like(feat)
+            output = feat
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -293,9 +300,15 @@ class dropout(object):
         #############################################################################
         # TODO: Implement the backward pass of Dropout                              #
         # Select gradients only from selected activations.                          #
-        # Store the output gradients in the variable dfeat provided above.          #
+        # Store the output gradients in the variable `dfeat` provided above.        #
         #############################################################################
-        pass
+        if self.is_training:
+            if self.keep_prob == 0 or self.keep_prob == 1:
+                dfeat = dprev
+            else:
+                dfeat = (dprev * self.kept) * (1 / self.keep_prob)
+        else:
+            dfeat = dprev
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -316,15 +329,34 @@ class cross_entropy(object):
         self.label = None
 
     def forward(self, feat, label):
+        """
+        - feat: (N, K) matrix of input features
+        - label: (N,) vector of the correct class (NOT ONE-HOT ENCODING)
+        """
         logit = softmax(feat)
         loss = None
         #############################################################################
-        # TODO: Implement the forward pass of an CE Loss                            #
-        # Store the loss in the variable loss provided above.                       #
+        # TODO: Implement the forward pass of a CE Loss                             #
+        # Store the loss in the variable `loss` provided above.                     #
         # Note that the returned loss should be the sum of CE of all data samples   #
         # if self.size_average is False and the mean if self.size_average is True.  #
         #############################################################################
-        pass
+        """
+        this line does something amazing:
+        - computes 1 to N-1 for indexing each input row
+        - grabs the corresponding 1 to N-1 from the label vector
+        
+        what happens then is we use ✨ fancy indexing to:
+        - `foreach` logit row
+        - grab the true class y_c at that row
+
+        all in 1 line 🚀
+        """
+        num_inputs = feat.shape[0]
+        chosen_class_probs = logit[np.arange(num_inputs), label]
+        loss = np.sum(-np.log(chosen_class_probs))
+        if self.size_average:
+            loss /= num_inputs
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -339,10 +371,29 @@ class cross_entropy(object):
             raise ValueError("No forward function called before for this module!")
         dlogit = None
         #############################################################################
-        # TODO: Implement the backward pass of an CE Loss                           #
+        # TODO: Implement the backward pass of a CE Loss                            #
         # Store the output gradients in the variable dlogit provided above.         #
         #############################################################################
-        pass
+        """
+        this is another 🧠 big brain move
+        
+        recall that the derivative for cross entropy loss L wrt logit z_i is
+            dL/dz_i = p_i - y_i
+        and since y_i is one-hot encoded, is either 0 or 1
+        
+        thus, when we use ✨ fancy indexing to:
+        - `foreach` dlogit row
+        - grab the true class y_c at that row
+        
+        we essentially grab the y_c where it is 1, then selectively apply the -1 
+        only to these cells, thus completing the chain rule
+        """
+        num_inputs = logit.shape[0]
+        dlogit = logit.copy()
+        dlogit[np.arange(num_inputs), label] -= 1
+
+        if self.size_average:
+            dlogit /= num_inputs
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -352,13 +403,18 @@ class cross_entropy(object):
 
 
 def softmax(feat):
+    """
+    takes in input feature (N, K), converts it into probability distribution of
+    the same size
+    """
     scores = None
 
     #############################################################################
     # TODO: Implement the forward pass of a softmax function                    #
     # Return softmax values over the last dimension of feat.                    #
     #############################################################################
-    pass
+    exp = np.exp(feat)
+    scores = exp / np.sum(exp, axis=1, keepdims=True)
     #############################################################################
     #                             END OF YOUR CODE                              #
     #############################################################################

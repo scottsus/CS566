@@ -98,7 +98,7 @@ def train_net(
     Train a network with this function, parameters of the network are updated
     using stochastic gradient descent methods defined in optim.py.
 
-    The parameters which achive the best performance after training for given epochs
+    The parameters which achieve the best performance after training for given epochs
     will be returned as a param dict. The training history and the validation history
     is returned for post analysis.
 
@@ -160,7 +160,12 @@ def train_net(
             # pass to the network, and make a step for the optimizer.                   #
             # Store the loss to loss_hist                                               #
             #############################################################################
-            pass
+            scores = model.forward(data_batch)
+            loss = loss_func.forward(scores, labels_batch)
+            dLoss = loss_func.backward()
+            model.backward(dLoss)
+            optimizer.step()
+            loss_hist.append(loss)
             #############################################################################
             #                             END OF YOUR CODE                              #
             #############################################################################
@@ -181,7 +186,8 @@ def train_net(
         # compute_acc method, store the results to train_acc and val_acc,           #
         # respectively                                                              #
         #############################################################################
-        pass
+        train_acc = compute_acc(model, data_batch, labels_batch, batch_size=batch_size)
+        val_acc = compute_acc(model, data_val, labels_val, batch_size=batch_size)
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -194,7 +200,8 @@ def train_net(
             # TODO: Save the optimal parameters to opt_params variable by name using    #
             # model.net.gather_params method                                            #
             #############################################################################
-            pass
+            model.net.gather_params()
+            opt_params = model.net.params
             #############################################################################
             #                             END OF YOUR CODE                              #
             #############################################################################
