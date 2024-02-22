@@ -1,7 +1,11 @@
 # Assignment 1
-original.zip
 cifar*
+original.zip
+submission.zip
 
 # Python
 __pycache__
 .venv
+
+# Misc
+.DS_Store
