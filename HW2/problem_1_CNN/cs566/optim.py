@@ -151,9 +151,21 @@ def adam(w, dw, config=None):
     # using it in any calculations.                                           #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    config["t"] += 1
 
-    pass
+    lr, epsilon = config["learning_rate"], config["epsilon"]
+    t, beta1, beta2 = config["t"], config["beta1"], config["beta2"]
+    first_moment, second_moment = config["m"], config["v"]
 
+    first_moment = beta1 * first_moment + (1 - beta1) * dw
+    second_moment = beta2 * second_moment + (1 - beta2) * dw * dw
+
+    first_unbias = first_moment / (1 - beta1 ** t)
+    second_unbias = second_moment / (1 - beta2 ** t)
+
+    config["m"] = first_moment
+    config["v"] = second_moment
+    next_w = w - lr * first_unbias / (np.sqrt(second_unbias) + epsilon)
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
